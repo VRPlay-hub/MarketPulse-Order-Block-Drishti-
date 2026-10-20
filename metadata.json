@@ -1,0 +1,6 @@
+{
+  "name": "MarketPulse India",
+  "description": "Indian Market Intelligence and Institutional Order Block Analytics Platform",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

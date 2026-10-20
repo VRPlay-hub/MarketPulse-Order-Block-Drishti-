@@ -1,0 +1,254 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user profile record",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID matching document ID",
+          "maxLength": 128
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address",
+          "maxLength": 256
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name",
+          "maxLength": 128
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "User avatar photo URL",
+          "maxLength": 512
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of account registration",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last profile update",
+          "maxLength": 64
+        }
+      },
+      "required": ["userId", "email"]
+    },
+    "UserWatchlist": {
+      "title": "UserWatchlist",
+      "description": "User-specific custom stock watchlist",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Watchlist unique identifier",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name of the watchlist",
+          "maxLength": 64,
+          "minLength": 1
+        },
+        "symbols": {
+          "type": "array",
+          "description": "List of NSE/BSE stock symbols"
+        },
+        "isDefault": {
+          "type": "boolean",
+          "description": "Whether this is the default watchlist"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "userId", "name", "symbols"]
+    },
+    "JournalTrade": {
+      "title": "JournalTrade",
+      "description": "User-specific trading journal entry with execution metrics and PnL",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Trade unique record ID",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID",
+          "maxLength": 128
+        },
+        "date": {
+          "type": "string",
+          "description": "Date or timestamp of trade entry",
+          "maxLength": 64
+        },
+        "symbol": {
+          "type": "string",
+          "description": "Stock trading symbol",
+          "maxLength": 32
+        },
+        "direction": {
+          "type": "string",
+          "description": "LONG or SHORT",
+          "enum": ["LONG", "SHORT"]
+        },
+        "entryPrice": {
+          "type": "number",
+          "description": "Entry execution price in INR"
+        },
+        "exitPrice": {
+          "type": "number",
+          "description": "Exit execution price in INR"
+        },
+        "stopLoss": {
+          "type": "number",
+          "description": "Stop loss level in INR"
+        },
+        "targetPrice": {
+          "type": "number",
+          "description": "Target take-profit price in INR"
+        },
+        "quantity": {
+          "type": "number",
+          "description": "Trade quantity or lot volume"
+        },
+        "brokerageFees": {
+          "type": "number",
+          "description": "Brokerage and statutory transaction costs in INR"
+        },
+        "setupCategory": {
+          "type": "string",
+          "description": "Technical strategy attribution",
+          "maxLength": 64
+        },
+        "notes": {
+          "type": "string",
+          "description": "User trade execution review notes",
+          "maxLength": 2048
+        },
+        "grossPnL": {
+          "type": "number",
+          "description": "Gross profit or loss"
+        },
+        "netPnL": {
+          "type": "number",
+          "description": "Net profit or loss after transaction costs"
+        },
+        "returnPercent": {
+          "type": "number",
+          "description": "Percentage return on invested capital"
+        },
+        "riskRewardAchieved": {
+          "type": "number",
+          "description": "Actual realized risk-to-reward ratio"
+        },
+        "outcome": {
+          "type": "string",
+          "description": "Trade result category",
+          "enum": ["WIN", "LOSS", "BREAKEVEN"]
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Record creation timestamp",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Record update timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "userId", "date", "symbol", "direction", "entryPrice", "exitPrice", "quantity", "grossPnL", "netPnL", "outcome"]
+    },
+    "ChartPreferences": {
+      "title": "ChartPreferences",
+      "description": "User-specific saved technical chart preferences",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Preferences document identifier",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID",
+          "maxLength": 128
+        },
+        "defaultSymbol": {
+          "type": "string",
+          "description": "Default active stock symbol",
+          "maxLength": 32
+        },
+        "timeframe": {
+          "type": "string",
+          "description": "Active chart timeframe (e.g., 1D, 4H, 1H)",
+          "maxLength": 16
+        },
+        "showOrderBlocks": {
+          "type": "boolean",
+          "description": "Toggle order block zones on chart"
+        },
+        "showLiquidity": {
+          "type": "boolean",
+          "description": "Toggle liquidity lines on chart"
+        },
+        "showSMA": {
+          "type": "boolean",
+          "description": "Toggle 20 SMA line"
+        },
+        "showVolume": {
+          "type": "boolean",
+          "description": "Toggle volume histogram bars"
+        },
+        "candleStyle": {
+          "type": "string",
+          "description": "Candle visual style",
+          "maxLength": 32
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last updated timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "userId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Root user profile document"
+    },
+    "/users/{userId}/watchlists/{watchlistId}": {
+      "schema": "UserWatchlist",
+      "description": "User-specific custom watchlists"
+    },
+    "/users/{userId}/trades/{tradeId}": {
+      "schema": "JournalTrade",
+      "description": "User-specific trading journal entries"
+    },
+    "/users/{userId}/preferences/{preferenceId}": {
+      "schema": "ChartPreferences",
+      "description": "User-specific saved chart settings and preferences"
+    }
+  }
+}
