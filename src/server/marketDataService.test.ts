@@ -249,6 +249,16 @@ test('UpstoxMarketProvider handles simulated 401 unauthorized and 429 rate limit
   const candles = await provider.getCandles('RELIANCE', '1D', 10);
   assert.ok(candles.length > 0);
 
+  // Empty symbols parameter defaults to full constituent universe without sending empty instrument_key or throwing
+  const allQuotes = await provider.getQuotes([]);
+  assert.ok(allQuotes.length > 0);
+  assert.ok(allQuotes.some(q => q.symbol === 'RELIANCE'));
+
+  // Unmapped/custom symbols fall back cleanly to synthetic representation without sending invalid keys
+  const unmappedQuotes = await provider.getQuotes(['UNMAPPED_XYZ_STOCK']);
+  assert.ok(unmappedQuotes.length > 0);
+  assert.equal(unmappedQuotes[0].symbol, 'UNMAPPED_XYZ_STOCK');
+
   delete process.env.UPSTOX_ACCESS_TOKEN;
 });
 
@@ -270,5 +280,79 @@ test('Real vs synthetic data tagging: verifies feedStatus and demo notices are s
     assert.equal(idx.feedStatus, 'SIMULATED');
     assert.equal(idx.dataSource, 'Synthetic Demonstration Provider');
   }
+});
+
+test('UpstoxSessionManager manages volatile server memory sessions safely without token leakage', async () => {
+  const { UpstoxSessionManager, getMarketDataProvider, UpstoxMarketProvider, DemonstrationMarketProvider } = await import('./marketDataService.ts');
+
+  // Reset any preexisting session
+  UpstoxSessionManager.clearToken();
+  delete process.env.UPSTOX_ACCESS_TOKEN;
+
+  // 1. Initial State
+  assert.equal(UpstoxSessionManager.isConnected(), false);
+  const initialStatus = UpstoxSessionManager.getStatusInfo();
+  assert.equal(initialStatus.isConnected, false);
+  assert.equal(initialStatus.source, 'none');
+  // Confirm token property does not exist on status info
+  assert.equal((initialStatus as unknown as Record<string, unknown>).token, undefined);
+
+  // 2. Set Memory Session
+  const sampleToken = 'eySAMPLE_JWT_TOKEN_FOR_UPSTOX_AUTH_987654321';
+  UpstoxSessionManager.setToken(sampleToken, 'RELIANCE', 2895.5);
+
+  assert.equal(UpstoxSessionManager.isConnected(), true);
+  const connectedStatus = UpstoxSessionManager.getStatusInfo();
+  assert.equal(connectedStatus.isConnected, true);
+  assert.equal(connectedStatus.source, 'memory_session');
+  assert.equal(connectedStatus.verifiedSymbol, 'RELIANCE');
+  assert.equal(connectedStatus.samplePrice, 2895.5);
+  assert.ok(connectedStatus.connectedAt);
+  // CRITICAL: Ensure token string is NEVER exposed in status object
+  assert.equal((connectedStatus as unknown as Record<string, unknown>).token, undefined);
+  assert.equal(JSON.stringify(connectedStatus).includes(sampleToken), false);
+
+  // 3. getMarketDataProvider returns UpstoxMarketProvider when session is active
+  const provider = getMarketDataProvider();
+  assert.ok(provider instanceof UpstoxMarketProvider);
+  assert.equal(provider.isConfigured, true);
+
+  // 4. Clear Session
+  UpstoxSessionManager.clearToken();
+  assert.equal(UpstoxSessionManager.isConnected(), false);
+  const clearedStatus = UpstoxSessionManager.getStatusInfo();
+  assert.equal(clearedStatus.isConnected, false);
+  assert.equal(clearedStatus.source, 'none');
+
+  // 5. getMarketDataProvider falls back cleanly to DemonstrationMarketProvider
+  const fallbackProvider = getMarketDataProvider();
+  assert.ok(fallbackProvider instanceof DemonstrationMarketProvider);
+  assert.equal(fallbackProvider.providerId, 'synthetic_demo');
+});
+
+test('verifyUpstoxToken rejects invalid, empty, or malformed tokens safely', async () => {
+  const { verifyUpstoxToken } = await import('./marketDataService.ts');
+
+  // Empty string
+  const resEmpty = await verifyUpstoxToken('');
+  assert.equal(resEmpty.success, false);
+  assert.ok(resEmpty.message.includes('empty or too short'));
+
+  // Short string
+  const resShort = await verifyUpstoxToken('12345');
+  assert.equal(resShort.success, false);
+  assert.ok(resShort.message.includes('empty or too short'));
+
+  // Whitespace only
+  const resWhitespace = await verifyUpstoxToken('       ');
+  assert.equal(resWhitespace.success, false);
+  assert.ok(resWhitespace.message.includes('empty or too short'));
+
+  // Invalid fake token (live API will return 401 Unauthorized or failure, safely redacted)
+  const fakeToken = 'INVALID_FAKE_TOKEN_SECRET_XYZ999';
+  const resInvalid = await verifyUpstoxToken(fakeToken);
+  assert.equal(resInvalid.success, false);
+  // Check that the fake token secret is never reflected in the returned error message
+  assert.equal(resInvalid.message.includes(fakeToken), false);
 });
 

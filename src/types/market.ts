@@ -252,4 +252,4 @@ export interface BacktestSummary {
   equityCurve: { date: string; equity: number; drawdown?: number }[];
 }
 
-export type DataSourceType = 'DEMO_SYNTHETIC' | 'CSV_UPLOADED' | 'EXTERNAL_API_STUB';
+export type DataSourceType = 'DEMO_SYNTHETIC' | 'CSV_UPLOADED' | 'LIVE_UPSTOX' | 'EXTERNAL_API_STUB';

@@ -13,7 +13,8 @@ import type {
   MarketIndexSummary,
   SectorSummary,
   Watchlist,
-  JournalTrade
+  JournalTrade,
+  DataSourceType
 } from '../../types/market.js';
 import { DataSourceStatus } from '../common/DataSourceStatus.js';
 
@@ -23,6 +24,7 @@ interface OverviewDashboardProps {
   sectors: SectorSummary[];
   watchlists: Watchlist[];
   recentTrades: JournalTrade[];
+  dataSource?: DataSourceType;
   onSelectStock: (symbol: string) => void;
   onNavigate: (section: any) => void;
   onOpenImporter: () => void;
@@ -34,10 +36,15 @@ export function OverviewDashboard({
   sectors,
   watchlists,
   recentTrades,
+  dataSource = 'DEMO_SYNTHETIC',
   onSelectStock,
   onNavigate,
   onOpenImporter
 }: OverviewDashboardProps) {
+  const isLive = dataSource === 'LIVE_UPSTOX' || stocks.some(s => s.feedStatus === 'LIVE') || indices.some(i => i.feedStatus === 'LIVE');
+  const effectiveDataSource: DataSourceType = isLive ? 'LIVE_UPSTOX' : dataSource;
+  const lastUpdatedTime = stocks.find(s => s.lastUpdated)?.lastUpdated || indices.find(i => i.lastUpdated)?.lastUpdated || '15:30 IST';
+
   const bullishStocks = stocks.filter(s => s.bias === 'BULLISH').sort((a, b) => b.score.totalScore - a.score.totalScore);
   const bearishStocks = stocks.filter(s => s.bias === 'BEARISH').sort((a, b) => a.score.totalScore - b.score.totalScore);
   const neutralCount = stocks.length - bullishStocks.length - bearishStocks.length;
@@ -70,24 +77,55 @@ export function OverviewDashboard({
         </div>
 
         <div className="flex items-center gap-3">
-          <DataSourceStatus dataSource="DEMO_SYNTHETIC" lastUpdated="2026-03-24 15:30 IST" onOpenImporter={onOpenImporter} />
+          <DataSourceStatus dataSource={effectiveDataSource} lastUpdated={lastUpdatedTime} onOpenImporter={onOpenImporter} />
         </div>
       </div>
 
-      {/* Prominent Demo Notice Callout */}
-      <div className="flex items-center justify-between p-3 rounded-lg bg-amber-950/40 border border-amber-600/40 text-xs text-amber-200">
-        <div className="flex items-center gap-2">
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-slate-950 uppercase">
-            DEMO DATA — NOT LIVE MARKET DATA
-          </span>
-          <span className="text-slate-300">
-            All index levels, quotes, and order block boundaries displayed are synthetic simulations for application testing.
+      {/* Prominent Live / Demo Notice Callout */}
+      {effectiveDataSource === 'LIVE_UPSTOX' ? (
+        <div className="flex items-center justify-between p-3 rounded-lg bg-emerald-950/40 border border-emerald-600/40 text-xs text-emerald-200">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500 text-slate-950 uppercase shrink-0">
+              LIVE UPSTOX DATA (NSE)
+            </span>
+            <span className="text-slate-300">
+              Connected to Upstox API v2. Real-time institutional quotes, index levels, and order blocks computed from genuine market data.
+            </span>
+          </div>
+          <span className="hidden sm:inline font-mono text-[10px] text-emerald-400 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            AUTHENTICATED BROKER FEED
           </span>
         </div>
-        <span className="hidden sm:inline font-mono text-[10px] text-amber-400">
-          PROD CONNECTIONS OPTIONAL
-        </span>
-      </div>
+      ) : effectiveDataSource === 'CSV_UPLOADED' ? (
+        <div className="flex items-center justify-between p-3 rounded-lg bg-sky-950/40 border border-sky-600/40 text-xs text-sky-200">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500 text-slate-950 uppercase shrink-0">
+              CUSTOM CSV DATASET
+            </span>
+            <span className="text-slate-300">
+              Displaying user-uploaded historical OHLCV data. Order block levels and liquidity zones computed locally.
+            </span>
+          </div>
+          <span className="hidden sm:inline font-mono text-[10px] text-sky-400">
+            CUSTOM DATASET
+          </span>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between p-3 rounded-lg bg-amber-950/40 border border-amber-600/40 text-xs text-amber-200">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-slate-950 uppercase shrink-0">
+              DEMO DATA — NOT LIVE MARKET DATA
+            </span>
+            <span className="text-slate-300">
+              All index levels, quotes, and order block boundaries displayed are synthetic simulations for application testing.
+            </span>
+          </div>
+          <span className="hidden sm:inline font-mono text-[10px] text-amber-400">
+            PROD CONNECTIONS OPTIONAL
+          </span>
+        </div>
+      )}
 
       {/* Index Summary Strip */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -97,7 +135,16 @@ export function OverviewDashboard({
             <div key={idx.symbol} className="bg-slate-900/60 border border-slate-800 rounded p-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{idx.name}</span>
-                <span className="text-[10px] font-mono text-amber-400 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-800/60">SIMULATED DEMO</span>
+                {idx.isDemoData ? (
+                  <span className="text-[10px] font-mono text-amber-400 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-800/60">
+                    SIMULATED DEMO
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-800/60 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    LIVE FEED
+                  </span>
+                )}
               </div>
               <div className="mt-2 flex items-baseline justify-between">
                 <span className="text-2xl font-bold text-white font-mono tabular-nums">

@@ -21,9 +21,10 @@ import {
   Info,
   Clock
 } from 'lucide-react';
-import type { StockQuote, TimeFrame, OrderBlockZone, LiquidityLevel } from '../../types/market.js';
+import type { StockQuote, TimeFrame, OrderBlockZone, LiquidityLevel, OHLCVCandle } from '../../types/market.js';
 import { aggregateCandlesToTimeframe, detectOrderBlocks } from '../../utils/calculations.js';
 import type { UserChartPreferences } from '../../services/persistenceService.ts';
+import { fetchMarketCandles } from '../../services/marketDataClient.ts';
 
 interface StockChartWorkspaceProps {
   stocks: StockQuote[];
@@ -98,10 +99,36 @@ export function StockChartWorkspace({
     return stocks.find(s => s.symbol === selectedSymbol) || stocks[0];
   }, [stocks, selectedSymbol]);
 
-  // Aggregate candles to chosen timeframe
+  const [liveCandles, setLiveCandles] = useState<OHLCVCandle[] | null>(null);
+
+  useEffect(() => {
+    let isCancelled = false;
+    if (currentStock && (currentStock.feedStatus === 'LIVE' || currentStock.isDemoData === false)) {
+      fetchMarketCandles(currentStock.symbol, timeframe, 80)
+        .then((fetched) => {
+          if (!isCancelled && fetched && fetched.length > 0) {
+            setLiveCandles(fetched);
+          }
+        })
+        .catch((err) => {
+          console.warn('Live candle fetch failed, using stock fallback:', err);
+        });
+    } else {
+      setLiveCandles(null);
+    }
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentStock?.symbol, currentStock?.feedStatus, currentStock?.isDemoData, timeframe]);
+
+  // Aggregate candles to chosen timeframe (prefer live candles when available)
   const activeCandles = useMemo(() => {
-    return aggregateCandlesToTimeframe(currentStock.candles1D, timeframe);
-  }, [currentStock.candles1D, timeframe]);
+    const baseCandles = liveCandles || currentStock.candles1D;
+    if (liveCandles && (timeframe === '1D' || timeframe === '1W')) {
+      return baseCandles;
+    }
+    return aggregateCandlesToTimeframe(baseCandles, timeframe);
+  }, [liveCandles, currentStock.candles1D, timeframe]);
 
   // Dynamically compute Order Blocks on the active timeframe
   const activeOBs = useMemo(() => {
@@ -498,18 +525,35 @@ export function StockChartWorkspace({
         </div>
       </div>
 
-      {/* Prominent Demo Notice Callout */}
-      <div className="flex items-center justify-between px-3 py-1.5 rounded bg-amber-950/40 border border-amber-600/40 text-[11px] text-amber-200">
-        <div className="flex items-center gap-2">
-          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-slate-950 uppercase shrink-0">
-            DEMO DATA — NOT LIVE MARKET DATA
-          </span>
-          <span className="text-slate-300">
-            Candlestick bars and indicators for {currentStock.symbol} are simulated demonstration values. Not genuine NSE execution prices.
+      {/* Prominent Live / Demo Notice Callout */}
+      {!currentStock.isDemoData ? (
+        <div className="flex items-center justify-between px-3 py-1.5 rounded bg-emerald-950/40 border border-emerald-600/40 text-[11px] text-emerald-200">
+          <div className="flex items-center gap-2">
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500 text-slate-950 uppercase shrink-0">
+              LIVE UPSTOX DATA (NSE)
+            </span>
+            <span className="text-slate-300">
+              Genuine candlestick bars, volume data, and order blocks computed for {currentStock.symbol} via Upstox API v2.
+            </span>
+          </div>
+          <span className="font-mono text-emerald-400 hidden sm:inline text-[10px] flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            LIVE BROKER FEED
           </span>
         </div>
-        <span className="font-mono text-amber-400 hidden sm:inline text-[10px]">DEMO MODE</span>
-      </div>
+      ) : (
+        <div className="flex items-center justify-between px-3 py-1.5 rounded bg-amber-950/40 border border-amber-600/40 text-[11px] text-amber-200">
+          <div className="flex items-center gap-2">
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-slate-950 uppercase shrink-0">
+              DEMO DATA — NOT LIVE MARKET DATA
+            </span>
+            <span className="text-slate-300">
+              Candlestick bars and indicators for {currentStock.symbol} are simulated demonstration values. Not genuine NSE execution prices.
+            </span>
+          </div>
+          <span className="font-mono text-amber-400 hidden sm:inline text-[10px]">DEMO MODE</span>
+        </div>
+      )}
 
       {/* Chart Canvas Area */}
       <div className="bg-slate-950 border border-slate-800 rounded p-2 relative">

@@ -42,7 +42,7 @@ export function Sidebar({
   const navItems: { id: NavSection; label: string; icon: typeof LayoutDashboard; kicker?: string }[] = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'scanner', label: 'Market Scanner', icon: Search },
-    { id: 'orderblocks', label: 'Order Block Scanner', icon: Box, kicker: 'INSTITUTIONAL' },
+    { id: 'orderblocks', label: 'Order Block Scanner', icon: Box, kicker: 'INST' },
     { id: 'liquidity', label: 'Liquidity Board', icon: Layers },
     { id: 'xray', label: 'Market X-Ray', icon: Activity },
     { id: 'chart', label: 'Stock Charts', icon: LineChart, kicker: activeSymbol },

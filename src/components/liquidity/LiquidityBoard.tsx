@@ -75,18 +75,35 @@ export function LiquidityBoard({ stocks, onSelectStock }: LiquidityBoardProps) {
         </button>
       </div>
 
-      {/* Prominent Demo Notice Callout */}
-      <div className="flex items-center justify-between px-3.5 py-2 rounded bg-amber-950/40 border border-amber-600/40 text-xs text-amber-200">
-        <div className="flex items-center gap-2">
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-slate-950 uppercase shrink-0">
-            DEMO DATA — NOT LIVE MARKET DATA
-          </span>
-          <span className="text-slate-300">
-            Liquidity rankings, relative volume multipliers, and scoring weights evaluate simulated equity metrics for testing. Not genuine live NSE quotes.
+      {/* Live / Demo Notice Callout */}
+      {stocks.some(s => s.feedStatus === 'LIVE' || s.isDemoData === false) ? (
+        <div className="flex items-center justify-between px-3.5 py-2 rounded bg-emerald-950/40 border border-emerald-600/40 text-xs text-emerald-200">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500 text-slate-950 uppercase shrink-0">
+              LIVE UPSTOX MARKET DATA (NSE)
+            </span>
+            <span className="text-slate-300">
+              Liquidity pools, swing sweeps, and institutional composite scores computed from genuine NSE market quotes.
+            </span>
+          </div>
+          <span className="font-mono text-emerald-400 text-[10px] hidden sm:inline flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            LIVE BROKER STREAM
           </span>
         </div>
-        <span className="font-mono text-amber-400 text-[10px] hidden sm:inline">DEMO SIMULATION</span>
-      </div>
+      ) : (
+        <div className="flex items-center justify-between px-3.5 py-2 rounded bg-amber-950/40 border border-amber-600/40 text-xs text-amber-200">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-slate-950 uppercase shrink-0">
+              DEMO DATA — NOT LIVE MARKET DATA
+            </span>
+            <span className="text-slate-300">
+              Liquidity rankings, relative volume multipliers, and scoring weights evaluate simulated equity metrics for testing. Not genuine live NSE quotes.
+            </span>
+          </div>
+          <span className="font-mono text-amber-400 text-[10px] hidden sm:inline">DEMO SIMULATION</span>
+        </div>
+      )}
 
       {/* Configurable Weight Sliders (when open) */}
       {showWeightSettings && (

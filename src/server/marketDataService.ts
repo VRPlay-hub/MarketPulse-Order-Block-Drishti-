@@ -276,16 +276,32 @@ export class DemonstrationMarketProvider implements IMarketDataProvider {
   }
 
   async getQuotes(symbols: string[]): Promise<StockQuote[]> {
-    const rawQuotes = MOCK_STOCKS.filter(s => symbols.length === 0 || symbols.includes(s.symbol));
     const nowTime = new Date().toLocaleTimeString('en-IN') + ' IST (Simulated)';
-    return rawQuotes.map(q => ({
-      ...q,
-      isDemoData: true,
-      demoNotice: DEMO_DATA_NOTICE,
-      feedStatus: 'SIMULATED' as const,
-      lastUpdated: nowTime,
-      dataSource: 'Synthetic Demonstration Provider'
-    }));
+    if (!symbols || symbols.length === 0) {
+      return MOCK_STOCKS.map(q => ({
+        ...q,
+        isDemoData: true,
+        demoNotice: DEMO_DATA_NOTICE,
+        feedStatus: 'SIMULATED' as const,
+        lastUpdated: nowTime,
+        dataSource: 'Synthetic Demonstration Provider'
+      }));
+    }
+
+    return symbols.map(sym => {
+      const existing = MOCK_STOCKS.find(s => s.symbol === sym);
+      const base = existing || MOCK_STOCKS[0];
+      return {
+        ...base,
+        symbol: sym,
+        companyName: existing ? existing.companyName : `${sym} (Demonstration)`,
+        isDemoData: true,
+        demoNotice: DEMO_DATA_NOTICE,
+        feedStatus: 'SIMULATED' as const,
+        lastUpdated: nowTime,
+        dataSource: 'Synthetic Demonstration Provider'
+      };
+    });
   }
 
   async getCandles(symbol: string, _timeframe: TimeFrame, count = 60): Promise<OHLCVCandle[]> {
@@ -317,8 +333,8 @@ export class UpstoxMarketProvider implements IMarketDataProvider {
   private lastTickMs: number = Date.now();
   private lastError: string | null = null;
 
-  constructor() {
-    this.accessToken = process.env.UPSTOX_ACCESS_TOKEN;
+  constructor(token?: string) {
+    this.accessToken = token || UpstoxSessionManager.getToken() || (typeof process !== 'undefined' ? process.env?.UPSTOX_ACCESS_TOKEN : undefined);
   }
 
   get isConfigured(): boolean {
@@ -360,14 +376,38 @@ export class UpstoxMarketProvider implements IMarketDataProvider {
       return demoProvider.getQuotes(symbols);
     }
 
-    const cacheKey = `upstox_quotes_${symbols.slice().sort().join('_')}`;
+    // Default to the standard constituent universe if no symbols were specified
+    const targetSymbols = symbols && symbols.length > 0
+      ? symbols
+      : MOCK_STOCKS.map(s => s.symbol);
+
+    const cacheKey = `upstox_quotes_${targetSymbols.slice().sort().join('_')}`;
     const cached = globalMarketCache.get<StockQuote[]>(cacheKey);
     if (cached) return cached;
 
+    // Filter target symbols to valid Upstox instruments
+    const validSymbols: string[] = [];
+    const validEncodedKeys: string[] = [];
+
+    for (const sym of targetSymbols) {
+      const key = getUpstoxInstrumentKey(sym);
+      // Valid Upstox key must be from our verified map or standard ISIN/Index format
+      if (NSE_INSTRUMENT_MAP[sym] || /^NSE_(EQ\|INE[A-Z0-9]{9}|INDEX\|.+)$/.test(key)) {
+        validSymbols.push(sym);
+        validEncodedKeys.push(encodeURIComponent(key));
+      }
+    }
+
+    // If no valid Upstox keys exist, fall back to demonstration/fallback quotes directly without an invalid network call
+    if (validEncodedKeys.length === 0) {
+      const demoProvider = new DemonstrationMarketProvider();
+      return demoProvider.getQuotes(targetSymbols);
+    }
+
     try {
-      // Map symbols to Upstox instrument keys (e.g. NSE_EQ|INE002A01018)
-      const instrumentKeys = symbols.map(s => getUpstoxInstrumentKey(s)).join(',');
-      const res = await fetch(`https://api.upstox.com/v2/market-quote/quotes?instrument_key=${encodeURIComponent(instrumentKeys)}`, {
+      // Upstox API v2 requires comma-separated keys with special characters like '|' encoded as '%7C' (not encoding the comma)
+      const instrumentParam = validEncodedKeys.join(',');
+      const res = await fetch(`https://api.upstox.com/v2/market-quote/quotes?instrument_key=${instrumentParam}`, {
         headers: {
           'Accept': 'application/json',
           'Authorization': `Bearer ${this.accessToken}`
@@ -385,7 +425,14 @@ export class UpstoxMarketProvider implements IMarketDataProvider {
       }
 
       if (!res.ok) {
-        this.lastError = `Upstox API returned status ${res.status}: ${res.statusText}`;
+        let details = '';
+        try {
+          const errBody = await res.json();
+          details = errBody.message || (errBody.errors && JSON.stringify(errBody.errors)) || '';
+        } catch {
+          details = res.statusText;
+        }
+        this.lastError = `Upstox API returned status ${res.status}: ${details || res.statusText}`;
         throw new Error(this.lastError);
       }
 
@@ -396,7 +443,7 @@ export class UpstoxMarketProvider implements IMarketDataProvider {
       const results: StockQuote[] = [];
       const dataObj = json.data || {};
 
-      for (const symbol of symbols) {
+      for (const symbol of targetSymbols) {
         const isinKey = getUpstoxInstrumentKey(symbol).replace('|', ':');
         const symKey = `NSE_EQ:${symbol}`;
         const item = dataObj[isinKey] || dataObj[symKey];
@@ -404,8 +451,11 @@ export class UpstoxMarketProvider implements IMarketDataProvider {
 
         if (item) {
           const lastPrice = item.last_price || fallback.lastPrice;
-          const prevClose = item.ohlc?.close || fallback.previousClose;
-          const change = Number((lastPrice - prevClose).toFixed(2));
+          const netChange = typeof item.net_change === 'number' ? item.net_change : null;
+          const prevClose = netChange !== null
+            ? Number((lastPrice - netChange).toFixed(2))
+            : item.ohlc?.close || fallback.previousClose;
+          const change = netChange !== null ? Number(netChange.toFixed(2)) : Number((lastPrice - prevClose).toFixed(2));
           const changePercent = prevClose > 0 ? Number(((change / prevClose) * 100).toFixed(2)) : 0;
           const open = item.ohlc?.open || fallback.open;
           const dayHigh = item.ohlc?.high || fallback.dayHigh;
@@ -424,6 +474,7 @@ export class UpstoxMarketProvider implements IMarketDataProvider {
             changePercent,
             volume,
             isDemoData: false,
+            demoNotice: undefined,
             feedStatus: 'LIVE',
             lastUpdated: new Date().toLocaleTimeString('en-IN') + ' IST',
             dataSource: 'Upstox Developer API v2 (NSE Live)'
@@ -432,6 +483,7 @@ export class UpstoxMarketProvider implements IMarketDataProvider {
           // If a particular symbol wasn't returned in the Upstox response
           results.push({
             ...fallback,
+            symbol,
             isDemoData: true,
             demoNotice: DEMO_DATA_NOTICE,
             feedStatus: 'SIMULATED',
@@ -445,7 +497,7 @@ export class UpstoxMarketProvider implements IMarketDataProvider {
     } catch (err) {
       console.warn('Upstox quote retrieval failed, falling back to demonstration provider:', err);
       const demoProvider = new DemonstrationMarketProvider();
-      return demoProvider.getQuotes(symbols);
+      return demoProvider.getQuotes(targetSymbols);
     }
   }
 
@@ -523,7 +575,9 @@ export class UpstoxMarketProvider implements IMarketDataProvider {
     }
 
     try {
-      const res = await fetch('https://api.upstox.com/v2/market-quote/quotes?instrument_key=NSE_INDEX|Nifty%2050,NSE_INDEX|Nifty%20Bank', {
+      const niftyKey = encodeURIComponent(getUpstoxInstrumentKey('NIFTY'));
+      const bankKey = encodeURIComponent(getUpstoxInstrumentKey('BANKNIFTY'));
+      const res = await fetch(`https://api.upstox.com/v2/market-quote/quotes?instrument_key=${niftyKey},${bankKey}`, {
         headers: {
           'Accept': 'application/json',
           'Authorization': `Bearer ${this.accessToken}`
@@ -545,8 +599,13 @@ export class UpstoxMarketProvider implements IMarketDataProvider {
           const item = idx.symbol === 'NIFTY' ? niftyData : idx.symbol === 'BANKNIFTY' ? bankData : null;
           if (item) {
             const lastPrice = item.last_price || idx.lastPrice;
-            const prevClose = item.ohlc?.close || (lastPrice - idx.change);
-            const change = Number((lastPrice - prevClose).toFixed(2));
+            const netChange = typeof item.net_change === 'number' ? item.net_change : null;
+            const prevClose = item.ohlc?.close && item.ohlc.close > 0
+              ? item.ohlc.close
+              : netChange !== null
+              ? Number((lastPrice - netChange).toFixed(2))
+              : (lastPrice - idx.change);
+            const change = netChange !== null ? Number(netChange.toFixed(2)) : Number((lastPrice - prevClose).toFixed(2));
             const changePercent = prevClose > 0 ? Number(((change / prevClose) * 100).toFixed(2)) : 0;
 
             return {
@@ -557,6 +616,7 @@ export class UpstoxMarketProvider implements IMarketDataProvider {
               dayHigh: item.ohlc?.high || idx.dayHigh,
               dayLow: item.ohlc?.low || idx.dayLow,
               isDemoData: false,
+              demoNotice: undefined,
               feedStatus: 'LIVE' as const,
               dataSource: 'Upstox Developer API v2 (NSE)',
               lastUpdated: new Date().toLocaleTimeString('en-IN') + ' IST'
@@ -574,18 +634,191 @@ export class UpstoxMarketProvider implements IMarketDataProvider {
   }
 }
 
+export interface UpstoxSessionStatus {
+  isConnected: boolean;
+  source: 'memory_session' | 'env_variable' | 'none';
+  connectedAt: string | null;
+  error: string | null;
+  verifiedSymbol?: string;
+  samplePrice?: number;
+}
+
+/**
+ * Server-side volatile memory session manager for Upstox Access Token.
+ * Held strictly in server process memory — never written to disk, database, or client storage.
+ */
+export class UpstoxSessionManager {
+  private static memoryToken: string | null = null;
+  private static tokenConnectedAt: string | null = null;
+  private static lastVerificationError: string | null = null;
+  private static verifiedSymbol: string | null = null;
+  private static samplePrice: number | null = null;
+
+  static setToken(token: string, verifiedSymbol = 'RELIANCE', samplePrice?: number): void {
+    UpstoxSessionManager.memoryToken = token.trim();
+    UpstoxSessionManager.tokenConnectedAt = new Date().toISOString();
+    UpstoxSessionManager.lastVerificationError = null;
+    UpstoxSessionManager.verifiedSymbol = verifiedSymbol;
+    UpstoxSessionManager.samplePrice = samplePrice ?? null;
+    globalMarketCache.clear();
+  }
+
+  static clearToken(): void {
+    UpstoxSessionManager.memoryToken = null;
+    UpstoxSessionManager.tokenConnectedAt = null;
+    UpstoxSessionManager.lastVerificationError = null;
+    UpstoxSessionManager.verifiedSymbol = null;
+    UpstoxSessionManager.samplePrice = null;
+    globalMarketCache.clear();
+  }
+
+  static getToken(fallbackToken?: string): string | null {
+    if (UpstoxSessionManager.memoryToken && UpstoxSessionManager.memoryToken.trim() !== '') {
+      return UpstoxSessionManager.memoryToken;
+    }
+    const token = fallbackToken || (typeof process !== 'undefined' ? process.env?.UPSTOX_ACCESS_TOKEN : undefined);
+    if (token && token.trim() !== '') {
+      return token.trim();
+    }
+    return null;
+  }
+
+  static isConnected(fallbackToken?: string): boolean {
+    const token = UpstoxSessionManager.getToken(fallbackToken);
+    return Boolean(token && token.length >= 10);
+  }
+
+  static getStatusInfo(fallbackToken?: string): UpstoxSessionStatus {
+    if (UpstoxSessionManager.memoryToken) {
+      return {
+        isConnected: true,
+        source: 'memory_session',
+        connectedAt: UpstoxSessionManager.tokenConnectedAt,
+        error: UpstoxSessionManager.lastVerificationError,
+        verifiedSymbol: UpstoxSessionManager.verifiedSymbol || undefined,
+        samplePrice: UpstoxSessionManager.samplePrice || undefined
+      };
+    }
+    const token = fallbackToken || (typeof process !== 'undefined' ? process.env?.UPSTOX_ACCESS_TOKEN : undefined);
+    if (token && token.trim() !== '') {
+      return {
+        isConnected: true,
+        source: 'env_variable',
+        connectedAt: null,
+        error: null,
+        verifiedSymbol: 'RELIANCE'
+      };
+    }
+    return {
+      isConnected: false,
+      source: 'none',
+      connectedAt: null,
+      error: UpstoxSessionManager.lastVerificationError
+    };
+  }
+
+  static setVerificationError(err: string): void {
+    UpstoxSessionManager.lastVerificationError = err;
+  }
+}
+
+/**
+ * Validates and verifies an Upstox access token against the live Upstox API v2.
+ * Redacts tokens from all error messages and diagnostics.
+ */
+export async function verifyUpstoxToken(token: string): Promise<{
+  success: boolean;
+  message: string;
+  sampleData?: { symbol: string; lastPrice: number; dayHigh: number; dayLow: number };
+}> {
+  if (!token || typeof token !== 'string' || token.trim().length < 10) {
+    return {
+      success: false,
+      message: 'Token verification failed: Token is empty or too short to be a valid Upstox Access Token.'
+    };
+  }
+
+  const cleanToken = token.trim();
+
+  try {
+    const instrumentKey = getUpstoxInstrumentKey('RELIANCE');
+    const res = await fetch(`https://api.upstox.com/v2/market-quote/quotes?instrument_key=${encodeURIComponent(instrumentKey)}`, {
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${cleanToken}`
+      }
+    });
+
+    if (res.status === 401) {
+      return {
+        success: false,
+        message: 'Upstox verification failed (HTTP 401 Unauthorized): Invalid, expired, or revoked access token.'
+      };
+    }
+
+    if (res.status === 429) {
+      return {
+        success: false,
+        message: 'Upstox rate limit reached (HTTP 429). Please wait a few seconds and retry.'
+      };
+    }
+
+    if (!res.ok) {
+      return {
+        success: false,
+        message: `Upstox API responded with HTTP status ${res.status}: ${res.statusText}`
+      };
+    }
+
+    const json = await res.json();
+    const dataObj = json.data || {};
+    const item = dataObj['NSE_EQ:INE002A01018'] || dataObj['NSE_EQ:RELIANCE'];
+
+    if (!item || typeof item.last_price !== 'number') {
+      return {
+        success: false,
+        message: 'Upstox API responded, but quote data format was invalid or missing expected price fields.'
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Verified successfully! Active connection established to Upstox Developer API v2 (NSE).',
+      sampleData: {
+        symbol: 'RELIANCE',
+        lastPrice: item.last_price,
+        dayHigh: item.ohlc?.high || item.last_price,
+        dayLow: item.ohlc?.low || item.last_price
+      }
+    };
+  } catch (err) {
+    const rawError = err instanceof Error ? err.message : String(err);
+    // Strict redaction of token from any error string
+    const sanitizedError = rawError.split(cleanToken).join('[REDACTED_TOKEN]');
+    return {
+      success: false,
+      message: `Connection test failed: ${sanitizedError}`
+    };
+  }
+}
+
+export interface ServerEnvironmentConfig {
+  UPSTOX_ACCESS_TOKEN?: string;
+  MARKET_DATA_PROVIDER?: string;
+}
+
 /**
  * Returns market data provider instance.
- * Defaults cleanly to DemonstrationMarketProvider when no credentials are configured.
+ * Dynamically prioritizes in-memory Upstox session, then environment variable, defaulting to Demonstration Provider.
  */
-export function getMarketDataProvider(): IMarketDataProvider {
-  const chosen = (process.env.MARKET_DATA_PROVIDER || '').toLowerCase();
-  const upstoxToken = process.env.UPSTOX_ACCESS_TOKEN;
+export function getMarketDataProvider(env?: ServerEnvironmentConfig): IMarketDataProvider {
+  const token = UpstoxSessionManager.getToken(env?.UPSTOX_ACCESS_TOKEN);
 
-  if (chosen === 'upstox' && upstoxToken && upstoxToken.trim() !== '') {
-    return new UpstoxMarketProvider();
+  if (token && token.trim() !== '') {
+    return new UpstoxMarketProvider(token);
   }
 
   // Default: Demonstration mode with synthetic demonstration data
   return new DemonstrationMarketProvider();
 }
+

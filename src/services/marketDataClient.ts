@@ -85,3 +85,71 @@ export async function fetchMarketIndices(): Promise<MarketIndexSummary[]> {
     return MOCK_INDICES;
   }
 }
+
+export interface UpstoxClientSessionStatus {
+  isConnected: boolean;
+  source: 'memory_session' | 'env_variable' | 'none';
+  connectedAt: string | null;
+  error: string | null;
+  verifiedSymbol?: string;
+  samplePrice?: number;
+}
+
+export async function fetchUpstoxConnectionStatus(): Promise<UpstoxClientSessionStatus> {
+  try {
+    const res = await fetch('/api/market/upstox/status');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    return json.data;
+  } catch (err) {
+    return {
+      isConnected: false,
+      source: 'none',
+      connectedAt: null,
+      error: err instanceof Error ? err.message : String(err)
+    };
+  }
+}
+
+export async function connectUpstoxAccount(token: string): Promise<{
+  success: boolean;
+  message: string;
+  verifiedSymbol?: string;
+  samplePrice?: number;
+}> {
+  const res = await fetch('/api/market/upstox/connect', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'MarketPulseApp'
+    },
+    body: JSON.stringify({ token })
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.error || `HTTP ${res.status}: Failed to connect`);
+  }
+
+  return json;
+}
+
+export async function disconnectUpstoxAccount(): Promise<{
+  success: boolean;
+  message: string;
+}> {
+  const res = await fetch('/api/market/upstox/disconnect', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'MarketPulseApp'
+    }
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.error || `HTTP ${res.status}: Failed to disconnect`);
+  }
+
+  return json;
+}

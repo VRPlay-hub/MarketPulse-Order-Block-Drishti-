@@ -199,18 +199,35 @@ export function HistoricalAnalysis({ stocks, onSelectStock }: HistoricalAnalysis
         </div>
       )}
 
-      {/* Prominent Demo Notice Callout */}
-      <div className="flex items-center justify-between px-3.5 py-2 rounded bg-amber-950/40 border border-amber-600/40 text-xs text-amber-200">
-        <div className="flex items-center gap-2">
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-slate-950 uppercase shrink-0">
-            DEMO DATA — NOT LIVE MARKET DATA
-          </span>
-          <span className="text-slate-300">
-            Backtest equity curves, win rates, and order block fills are generated from synthetic historical candles. Not genuine NSE execution records.
+      {/* Live / Demo Notice Callout */}
+      {stocks.some(s => s.feedStatus === 'LIVE' || s.isDemoData === false) ? (
+        <div className="flex items-center justify-between px-3.5 py-2 rounded bg-emerald-950/40 border border-emerald-600/40 text-xs text-emerald-200">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500 text-slate-950 uppercase shrink-0">
+              LIVE UPSTOX MARKET DATA (NSE)
+            </span>
+            <span className="text-slate-300">
+              Backtesting engine executing against genuine historical OHLCV candles retrieved via Upstox API v2.
+            </span>
+          </div>
+          <span className="font-mono text-emerald-400 text-[10px] hidden sm:inline flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            AUTHENTICATED DATASET
           </span>
         </div>
-        <span className="font-mono text-amber-400 text-[10px] hidden sm:inline">DEMO SIMULATION</span>
-      </div>
+      ) : (
+        <div className="flex items-center justify-between px-3.5 py-2 rounded bg-amber-950/40 border border-amber-600/40 text-xs text-amber-200">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-slate-950 uppercase shrink-0">
+              DEMO DATA — NOT LIVE MARKET DATA
+            </span>
+            <span className="text-slate-300">
+              Backtest equity curves, win rates, and order block fills are generated from synthetic historical candles. Not genuine NSE execution records.
+            </span>
+          </div>
+          <span className="font-mono text-amber-400 text-[10px] hidden sm:inline">DEMO SIMULATION</span>
+        </div>
+      )}
 
       {/* Legal & Methodological safeguard */}
       <div className="bg-amber-950/30 border border-amber-900/50 rounded p-3 text-xs text-amber-200/90 flex items-start gap-2.5">

@@ -109,18 +109,35 @@ export function TradingJournal({
         </button>
       </div>
 
-      {/* Prominent Demo Notice Callout */}
-      <div className="flex items-center justify-between px-3.5 py-2 rounded bg-amber-950/40 border border-amber-600/40 text-xs text-amber-200">
-        <div className="flex items-center gap-2">
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-slate-950 uppercase shrink-0">
-            DEMO DATA — NOT LIVE MARKET DATA
-          </span>
-          <span className="text-slate-300">
-            Initial demonstration trade records and execution prices are synthetic simulations for journal evaluation. Not real capital transactions.
+      {/* Live / Demo Notice Callout */}
+      {stocks.some(s => s.feedStatus === 'LIVE' || s.isDemoData === false) ? (
+        <div className="flex items-center justify-between px-3.5 py-2 rounded bg-emerald-950/40 border border-emerald-600/40 text-xs text-emerald-200">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500 text-slate-950 uppercase shrink-0">
+              LIVE MARKET PRICING ACTIVE
+            </span>
+            <span className="text-slate-300">
+              Journal performance tracking and trade logging with live NSE equity prices via Upstox API v2.
+            </span>
+          </div>
+          <span className="font-mono text-emerald-400 text-[10px] hidden sm:inline flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            ACTIVE FEED
           </span>
         </div>
-        <span className="font-mono text-amber-400 text-[10px] hidden sm:inline">DEMO SIMULATION</span>
-      </div>
+      ) : (
+        <div className="flex items-center justify-between px-3.5 py-2 rounded bg-amber-950/40 border border-amber-600/40 text-xs text-amber-200">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-slate-950 uppercase shrink-0">
+              DEMO DATA — NOT LIVE MARKET DATA
+            </span>
+            <span className="text-slate-300">
+              Initial demonstration trade records and execution prices are synthetic simulations for journal evaluation. Not real capital transactions.
+            </span>
+          </div>
+          <span className="font-mono text-amber-400 text-[10px] hidden sm:inline">DEMO SIMULATION</span>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">

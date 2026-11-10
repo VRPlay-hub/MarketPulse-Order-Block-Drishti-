@@ -55,14 +55,17 @@ import {
   type UserChartPreferences
 } from './services/persistenceService.ts';
 import { testConnection } from './services/firebase.ts';
-import { fetchMarketQuotes } from './services/marketDataClient.ts';
+import { fetchMarketQuotes, fetchMarketIndices, fetchProviderStatus } from './services/marketDataClient.ts';
+import type { MarketIndexSummary } from './types/market.js';
 
 export default function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [currentSection, setCurrentSection] = useState<NavSection>('overview');
   const [activeSymbol, setActiveSymbol] = useState<string>('RELIANCE');
   const [stocks, setStocks] = useState<StockQuote[]>(MOCK_STOCKS);
+  const [indices, setIndices] = useState<MarketIndexSummary[]>(MOCK_INDICES);
   const [dataSource, setDataSource] = useState<DataSourceType>('DEMO_SYNTHETIC');
+  const [lastTickTime, setLastTickTime] = useState<string | undefined>(undefined);
 
   // Authentication & Persistence State
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
@@ -77,14 +80,36 @@ export default function App() {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
-  // Check Firestore connection and fetch initial market quotes via server proxy
+  // Check Firestore connection and fetch initial market quotes & indices via server proxy
   useEffect(() => {
     testConnection().then(status => {
       setIsCloudConnected(status);
     });
+
+    fetchProviderStatus().then(status => {
+      if (status.lastTickTime) {
+        setLastTickTime(status.lastTickTime);
+      }
+      if (status.isRealTime) {
+        setDataSource('LIVE_UPSTOX');
+      }
+    });
+
+    fetchMarketIndices().then(latestIndices => {
+      if (latestIndices && latestIndices.length > 0) {
+        setIndices(latestIndices);
+        if (latestIndices.some(idx => idx.feedStatus === 'LIVE' || idx.isDemoData === false)) {
+          setDataSource('LIVE_UPSTOX');
+        }
+      }
+    });
+
     fetchMarketQuotes().then(latestQuotes => {
       if (latestQuotes && latestQuotes.length > 0) {
         setStocks(latestQuotes);
+        if (latestQuotes.some(q => q.feedStatus === 'LIVE' || q.isDemoData === false)) {
+          setDataSource('LIVE_UPSTOX');
+        }
       }
     });
   }, []);
@@ -312,13 +337,13 @@ export default function App() {
   return (
     <div className={`min-h-screen ${theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} flex flex-col font-sans selection:bg-sky-500 selection:text-white`}>
       {/* Risk Notice Banner */}
-      <RiskDisclaimerBanner />
+      <RiskDisclaimerBanner dataSource={dataSource} lastTickTime={lastTickTime} />
 
       {/* Top Navbar */}
       <Navbar
         theme={theme}
         onToggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
-        indices={MOCK_INDICES}
+        indices={indices}
         dataSource={dataSource}
         currentUser={currentUser}
         onOpenAuth={() => setIsAuthModalOpen(true)}
@@ -343,11 +368,12 @@ export default function App() {
           <div className="max-w-7xl mx-auto">
             {currentSection === 'overview' && (
               <OverviewDashboard
-                indices={MOCK_INDICES}
+                indices={indices}
                 stocks={stocks}
                 sectors={MOCK_SECTORS}
                 watchlists={watchlists}
                 recentTrades={trades}
+                dataSource={dataSource}
                 onSelectStock={handleSelectStock}
                 onNavigate={(sec) => setCurrentSection(sec)}
                 onOpenImporter={() => setIsImporterOpen(true)}

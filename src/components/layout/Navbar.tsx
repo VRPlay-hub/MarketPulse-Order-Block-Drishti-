@@ -30,7 +30,7 @@ export function Navbar({
   const vix = indices.find(i => i.symbol === 'VIX') || indices[2];
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between gap-8 px-5 py-3 border-b border-slate-800 bg-slate-950/95 backdrop-blur-sm">
+    <header className="sticky top-0 z-30 flex items-center justify-between gap-4 px-4 py-2.5 border-b border-slate-800 bg-slate-950/95 backdrop-blur-sm">
       {/* Zone 1: Single text element wordmark */}
       <div className="flex items-center gap-3 shrink-0">
         <button
@@ -51,7 +51,7 @@ export function Navbar({
       </div>
 
       {/* Zone 2: Index Ticker with Prominent Feed Status Label */}
-      <div className="hidden md:flex items-center gap-4 text-xs text-slate-300 overflow-x-auto no-scrollbar">
+      <div className="hidden md:flex items-center gap-3 text-xs text-slate-300 overflow-x-auto no-scrollbar min-w-0 flex-1 justify-center">
         {dataSource === 'CSV_UPLOADED' ? (
           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40 font-mono tracking-tight whitespace-nowrap shrink-0 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
@@ -60,7 +60,7 @@ export function Navbar({
         ) : nifty?.isDemoData === false ? (
           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono tracking-tight whitespace-nowrap shrink-0 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            LIVE UPSTOX BROKER FEED (NSE)
+            LIVE UPSTOX (NSE)
           </span>
         ) : (
           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono tracking-tight whitespace-nowrap shrink-0">
